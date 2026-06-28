@@ -1,47 +1,70 @@
-from django.shortcuts import render, redirect
-from django.contrib.auth import login, authenticate, logout
-from django.contrib import messages
-from accounts.models import User
+from datetime import datetime
+
 import requests
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.db import IntegrityError, transaction
+from django.shortcuts import get_object_or_404, redirect, render
+
+from bookings.models import Booking
+from doctors.models import AvailabilitySlot
+from google_calendar.utils import (
+    create_calendar_event,
+    refresh_token_if_expired,
+)
 
 
-def signup_view(request):
-    if request.method == "POST":
-        username = request.POST.get("username")
-        email = request.POST.get("email")
-        password1 = request.POST.get("password1")
-        password2 = request.POST.get("password2")
-        role = request.POST.get("role")
+# ---------------------------------------------------
+# Check whether the logged-in user is a patient
+# ---------------------------------------------------
 
-        # Check passwords
-        if password1 != password2:
-            messages.error(request, "Passwords do not match")
-            return render(request, "signup.html")
+def is_patient(user):
+    return user.is_authenticated and user.role == "patient"
 
-        # Check if username already exists
-        if User.objects.filter(username=username).exists():
-            messages.error(request, "Username already taken")
-            return render(request, "signup.html")
 
-        # Check if email already exists
-        if User.objects.filter(email=email).exists():
-            messages.error(request, "Email already registered")
-            return render(request, "signup.html")
+# ---------------------------------------------------
+# Book Appointment
+# ---------------------------------------------------
 
-        # Create user
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password1,
-            role=role
-        )
+@login_required
+@user_passes_test(is_patient)
+def book_slot(request, slot_id):
 
-        # Send welcome email through serverless email service
+    try:
+
+        with transaction.atomic():
+
+            # Lock the slot so two patients cannot book it simultaneously
+            slot = AvailabilitySlot.objects.select_for_update().get(id=slot_id)
+
+            if slot.is_booked:
+                messages.error(
+                    request,
+                    "Sorry! This appointment has already been booked."
+                )
+                return redirect("patient_dashboard")
+
+            slot.is_booked = True
+            slot.save()
+
+            booking = Booking.objects.create(
+                patient=request.user,
+                slot=slot
+            )
+
+        # ------------------------------------------------
+        # Send Email Notification
+        # ------------------------------------------------
+
         try:
+
             payload = {
-                "type": "SIGNUP_WELCOME",
-                "email": email,
-                "name": username,
+                "type": "BOOKING_CONFIRMATION",
+                "email": request.user.email,
+                "name": request.user.username,
+                "doctor_name": slot.doctor.username,
+                "date": str(slot.date),
+                "time": f"{slot.start_time} - {slot.end_time}"
             }
 
             requests.post(
@@ -51,46 +74,100 @@ def signup_view(request):
             )
 
         except Exception as e:
-            print(f"Email service not available: {e}")
+            print(f"Email service unavailable: {e}")
 
-        login(request, user)
-        return redirect("dashboard")
+        # ------------------------------------------------
+        # Create Google Calendar Events
+        # ------------------------------------------------
 
-    return render(request, "signup.html")
+        try:
 
+            start_dt = datetime.combine(slot.date, slot.start_time)
+            end_dt = datetime.combine(slot.date, slot.end_time)
 
-def login_view(request):
-    if request.method == "POST":
+            # Doctor Calendar
 
-        username = request.POST.get("username")
-        password = request.POST.get("password")
+            if slot.doctor.google_token:
 
-        user = authenticate(
+                token = refresh_token_if_expired(
+                    slot.doctor.google_token
+                )
+
+                if token:
+                    slot.doctor.google_token = token
+                    slot.doctor.save()
+
+                create_calendar_event(
+                    token,
+                    f"Appointment with {request.user.username}",
+                    start_dt,
+                    end_dt,
+                    f"Patient Email: {request.user.email}"
+                )
+
+            # Patient Calendar
+
+            if request.user.google_token:
+
+                token = refresh_token_if_expired(
+                    request.user.google_token
+                )
+
+                if token:
+                    request.user.google_token = token
+                    request.user.save()
+
+                create_calendar_event(
+                    token,
+                    f"Appointment with Dr. {slot.doctor.username}",
+                    start_dt,
+                    end_dt,
+                    f"Doctor: {slot.doctor.username}"
+                )
+
+        except Exception as e:
+            print(f"Calendar Error: {e}")
+
+        messages.success(
             request,
-            username=username,
-            password=password
+            "Appointment booked successfully!"
         )
 
-        if user is not None:
-            login(request, user)
-            return redirect("dashboard")
+        return redirect("patient_dashboard")
 
-        messages.error(request, "Invalid username or password")
+    except AvailabilitySlot.DoesNotExist:
 
-    return render(request, "login.html")
+        messages.error(request, "Appointment slot not found.")
 
+    except IntegrityError:
 
-def logout_view(request):
-    logout(request)
-    return redirect("login")
-
-
-def dashboard_view(request):
-
-    if not request.user.is_authenticated:
-        return redirect("login")
-
-    if request.user.role == "doctor":
-        return redirect("doctor_dashboard")
+        messages.error(
+            request,
+            "Someone booked this appointment just before you."
+        )
 
     return redirect("patient_dashboard")
+
+
+# ---------------------------------------------------
+# My Bookings
+# ---------------------------------------------------
+
+@login_required
+@user_passes_test(is_patient)
+def my_bookings(request):
+
+    bookings = Booking.objects.filter(
+        patient=request.user
+    ).select_related(
+        "slot",
+        "slot__doctor"
+    ).order_by("-created_at")
+
+    return render(
+        request,
+        "my_bookings.html",
+        {
+            "bookings": bookings
+        }
+    )
