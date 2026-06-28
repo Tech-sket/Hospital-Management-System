@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h2>
+
+Add Availability Slot
+
+</h2>
+
+<form method="post">
+
+{% csrf_token %}
+
+<p>
+
+Date
+
+<br>
+
+<input
+type="date"
+name="date"
+required>
+
+</p>
+
+<p>
+
+Start Time
+
+<br>
+
+<input
+type="time"
+name="start_time"
+required>
+
+</p>
+
+<p>
+
+End Time
+
+<br>
+
+<input
+type="time"
+name="end_time"
+required>
+
+</p>
+
+<button type="submit">
+
+Save Slot
+
+</button>
+
+</form>
+
+{% if error %}
+
+<p style="color:red">
+
+{{ error }}
+
+</p>
+
+{% endif %}
+
+<br>
+
+<a href="{% url 'doctor_dashboard' %}">
+
+Back
+
+</a>
+
+{% endblock %}

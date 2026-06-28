@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+
+    <div>
+
+        <h2 class="fw-bold">
+            Patient Dashboard
+        </h2>
+
+        <p class="text-muted mb-0">
+            Welcome, {{ user.username }}
+        </p>
+
+    </div>
+
+    <a href="{% url 'my_bookings' %}" class="btn btn-primary">
+
+        <i class="bi bi-calendar-check"></i>
+
+        My Bookings
+
+    </a>
+
+</div>
+
+<!-- Statistics -->
+
+<div class="dashboard-cards">
+
+    <div class="card-box">
+
+        <h6>Available Slots</h6>
+
+        <h2>{{ slots|length }}</h2>
+
+    </div>
+
+    <div class="card-box">
+
+        <h6>My Appointments</h6>
+
+        <h2>{{ booking_count|default:"0" }}</h2>
+
+    </div>
+
+    <div class="card-box">
+
+        <h6>Upcoming</h6>
+
+        <h2>{{ upcoming_count|default:"0" }}</h2>
+
+    </div>
+
+    <div class="card-box">
+
+        <h6>Doctors</h6>
+
+        <h2>{{ doctor_count|default:"0" }}</h2>
+
+    </div>
+
+</div>
+
+<!-- Available Slots -->
+
+<div class="table-container">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+
+        <h4 class="mb-0">
+
+            Available Appointment Slots
+
+        </h4>
+
+    </div>
+
+    <table class="table table-hover align-middle">
+
+        <thead>
+
+        <tr>
+
+            <th>Doctor</th>
+
+            <th>Date</th>
+
+            <th>Start</th>
+
+            <th>End</th>
+
+            <th>Status</th>
+
+            <th>Action</th>
+
+        </tr>
+
+        </thead>
+
+        <tbody>
+
+        {% for slot in slots %}
+
+        <tr>
+
+            <td>
+
+                <strong>
+
+                    Dr. {{ slot.doctor.username }}
+
+                </strong>
+
+            </td>
+
+            <td>{{ slot.date }}</td>
+
+            <td>{{ slot.start_time }}</td>
+
+            <td>{{ slot.end_time }}</td>
+
+            <td>
+
+                {% if slot.is_booked %}
+
+                    <span class="badge bg-danger">
+
+                        Booked
+
+                    </span>
+
+                {% else %}
+
+                    <span class="badge bg-success">
+
+                        Available
+
+                    </span>
+
+                {% endif %}
+
+            </td>
+
+            <td>
+
+                {% if not slot.is_booked %}
+
+                <a href="{% url 'book_slot' slot.id %}"
+
+                   class="btn btn-sm btn-primary">
+
+                    <i class="bi bi-calendar-plus"></i>
+
+                    Book
+
+                </a>
+
+                {% else %}
+
+                <button class="btn btn-sm btn-secondary" disabled>
+
+                    Not Available
+
+                </button>
+
+                {% endif %}
+
+            </td>
+
+        </tr>
+
+        {% empty %}
+
+        <tr>
+
+            <td colspan="6"
+
+                class="text-center text-muted">
+
+                No appointment slots available.
+
+            </td>
+
+        </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+{% endblock %}

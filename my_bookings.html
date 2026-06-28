@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h2>📅 My Bookings</h2>
+
+<p>
+Welcome,
+<strong>{{ user.username }}</strong>
+</p>
+
+<a href="{% url 'patient_dashboard' %}">
+← Back to Dashboard
+</a>
+
+<hr>
+
+{% if bookings %}
+
+<table border="1" cellpadding="10" cellspacing="0">
+
+    <tr>
+        <th>Doctor</th>
+        <th>Date</th>
+        <th>Start Time</th>
+        <th>End Time</th>
+        <th>Status</th>
+    </tr>
+
+    {% for booking in bookings %}
+
+    <tr>
+
+        <td>
+            Dr. {{ booking.slot.doctor.username }}
+        </td>
+
+        <td>
+            {{ booking.slot.date }}
+        </td>
+
+        <td>
+            {{ booking.slot.start_time }}
+        </td>
+
+        <td>
+            {{ booking.slot.end_time }}
+        </td>
+
+        <td>
+            ✅ Confirmed
+        </td>
+
+    </tr>
+
+    {% endfor %}
+
+</table>
+
+{% else %}
+
+<p>
+You haven't booked any appointments yet.
+</p>
+
+<a href="{% url 'patient_dashboard' %}">
+Book Your First Appointment
+</a>
+
+{% endif %}
+
+{% endblock %}
