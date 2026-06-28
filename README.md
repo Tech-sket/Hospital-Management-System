@@ -42,7 +42,7 @@ Configure OAuth consent screen
 Download credentials.json
 Place it in project root
 
-System Architecture
+* System Architecture
 
 The system is built using a modular architecture consisting of three core components:
 
@@ -90,7 +90,7 @@ Event contains doctor, patient, date, and time
 This ensures real-time synchronization between hospital system and Google Calendar.
 
 
-*The Design Decision
+* The Design Decision
 
 Decision: Serverless Email Service vs Direct Django Email (SMTP)
 
@@ -111,7 +111,7 @@ Reason for Choosing Serverless Approach:
 4)Improves system modularity
 5)Mimics real-world microservice architecture
 
-Limitations
+* Limitations
 1. Google OAuth is in testing mode
 Only approved test users can log in
 Requires manual configuration in Google Cloud Console
