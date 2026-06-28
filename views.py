@@ -1,173 +1,103 @@
-from datetime import datetime
-
-import requests
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required, user_passes_test
-from django.db import IntegrityError, transaction
-from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.timezone import now
 
+from .models import AvailabilitySlot
 from bookings.models import Booking
-from doctors.models import AvailabilitySlot
-from google_calendar.utils import (
-    create_calendar_event,
-    refresh_token_if_expired,
-)
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 
-# ---------------------------------------------------
-# Check whether the logged-in user is a patient
-# ---------------------------------------------------
-
-def is_patient(user):
-    return user.is_authenticated and user.role == "patient"
-
-
-# ---------------------------------------------------
-# Book Appointment
-# ---------------------------------------------------
+# ==========================
+# Doctor Dashboard
+# ==========================
 
 @login_required
-@user_passes_test(is_patient)
-def book_slot(request, slot_id):
+def doctor_dashboard(request):
 
-    try:
+    slots = AvailabilitySlot.objects.filter(
+        doctor=request.user
+    ).order_by("date", "start_time")
 
-        with transaction.atomic():
-
-            # Lock the slot so two patients cannot book it simultaneously
-            slot = AvailabilitySlot.objects.select_for_update().get(id=slot_id)
-
-            if slot.is_booked:
-                messages.error(
-                    request,
-                    "Sorry! This appointment has already been booked."
-                )
-                return redirect("patient_dashboard")
-
-            slot.is_booked = True
-            slot.save()
-
-            booking = Booking.objects.create(
-                patient=request.user,
-                slot=slot
-            )
-
-        # ------------------------------------------------
-        # Send Email Notification
-        # ------------------------------------------------
-
-        try:
-
-            payload = {
-                "type": "BOOKING_CONFIRMATION",
-                "email": request.user.email,
-                "name": request.user.username,
-                "doctor_name": slot.doctor.username,
-                "date": str(slot.date),
-                "time": f"{slot.start_time} - {slot.end_time}"
-            }
-
-            requests.post(
-                "http://localhost:3000/dev/email",
-                json=payload,
-                timeout=5
-            )
-
-        except Exception as e:
-            print(f"Email service unavailable: {e}")
-
-        # ------------------------------------------------
-        # Create Google Calendar Events
-        # ------------------------------------------------
-
-        try:
-
-            start_dt = datetime.combine(slot.date, slot.start_time)
-            end_dt = datetime.combine(slot.date, slot.end_time)
-
-            # Doctor Calendar
-
-            if slot.doctor.google_token:
-
-                token = refresh_token_if_expired(
-                    slot.doctor.google_token
-                )
-
-                if token:
-                    slot.doctor.google_token = token
-                    slot.doctor.save()
-
-                create_calendar_event(
-                    token,
-                    f"Appointment with {request.user.username}",
-                    start_dt,
-                    end_dt,
-                    f"Patient Email: {request.user.email}"
-                )
-
-            # Patient Calendar
-
-            if request.user.google_token:
-
-                token = refresh_token_if_expired(
-                    request.user.google_token
-                )
-
-                if token:
-                    request.user.google_token = token
-                    request.user.save()
-
-                create_calendar_event(
-                    token,
-                    f"Appointment with Dr. {slot.doctor.username}",
-                    start_dt,
-                    end_dt,
-                    f"Doctor: {slot.doctor.username}"
-                )
-
-        except Exception as e:
-            print(f"Calendar Error: {e}")
-
-        messages.success(
-            request,
-            "Appointment booked successfully!"
-        )
-
-        return redirect("patient_dashboard")
-
-    except AvailabilitySlot.DoesNotExist:
-
-        messages.error(request, "Appointment slot not found.")
-
-    except IntegrityError:
-
-        messages.error(
-            request,
-            "Someone booked this appointment just before you."
-        )
-
-    return redirect("patient_dashboard")
-
-
-# ---------------------------------------------------
-# My Bookings
-# ---------------------------------------------------
-
-@login_required
-@user_passes_test(is_patient)
-def my_bookings(request):
-
-    bookings = Booking.objects.filter(
-        patient=request.user
-    ).select_related(
-        "slot",
-        "slot__doctor"
-    ).order_by("-created_at")
+    context = {
+        "slots": slots,
+        "available_count": slots.filter(is_booked=False).count(),
+        "booked_count": slots.filter(is_booked=True).count(),
+        "today_count": slots.filter(date=now().date()).count(),
+    }
 
     return render(
         request,
-        "my_bookings.html",
-        {
-            "bookings": bookings
-        }
+        "doctor_dashboard.html",
+        context
+    )
+
+
+# ==========================
+# Add Slot
+# ==========================
+
+@login_required
+def add_slot(request):
+
+    if request.method == "POST":
+
+        date = request.POST.get("date")
+        start_time = request.POST.get("start_time")
+        end_time = request.POST.get("end_time")
+
+        AvailabilitySlot.objects.create(
+            doctor=request.user,
+            date=date,
+            start_time=start_time,
+            end_time=end_time
+        )
+
+        messages.success(request, "Slot added successfully.")
+
+        return redirect("doctor_dashboard")
+
+    return render(request, "add_slot.html")
+
+
+# ==========================
+# Patient Dashboard
+# ==========================
+
+@login_required
+def patient_dashboard(request):
+
+    slots = AvailabilitySlot.objects.filter(
+        is_booked=False
+    ).select_related("doctor").order_by(
+        "date",
+        "start_time"
+    )
+
+    booking_count = Booking.objects.filter(
+        patient=request.user
+    ).count()
+
+    upcoming_count = Booking.objects.filter(
+        patient=request.user,
+        slot__date__gte=now().date()
+    ).count()
+
+    doctor_count = User.objects.filter(
+        role="doctor"
+    ).count()
+
+    context = {
+        "slots": slots,
+        "booking_count": booking_count,
+        "upcoming_count": upcoming_count,
+        "doctor_count": doctor_count,
+    }
+
+    return render(
+        request,
+        "patient_dashboard.html",
+        context
     )

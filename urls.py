@@ -3,14 +3,20 @@ from . import views
 
 urlpatterns = [
     path(
-        "book-slot/<int:slot_id>/",
-        views.book_slot,
-        name="book_slot",
+        "doctor-dashboard/",
+        views.doctor_dashboard,
+        name="doctor_dashboard"
     ),
 
     path(
-        "my-bookings/",
-        views.my_bookings,
-        name="my_bookings",
+        "add-slot/",
+        views.add_slot,
+        name="add_slot"
+    ),
+
+    path(
+        "patient-dashboard/",
+        views.patient_dashboard,
+        name="patient_dashboard"
     ),
 ]

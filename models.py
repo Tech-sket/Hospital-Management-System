@@ -1,21 +1,22 @@
 from django.db import models
 from accounts.models import User
-from doctors.models import AvailabilitySlot
 
 
-class Booking(models.Model):
-    patient = models.ForeignKey(
+class AvailabilitySlot(models.Model):
+    doctor = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        limit_choices_to={'role': 'patient'}
+        limit_choices_to={'role': 'doctor'}
     )
 
-    slot = models.OneToOneField(
-        AvailabilitySlot,
-        on_delete=models.CASCADE
-    )
+    date = models.DateField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    is_booked = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('doctor', 'date', 'start_time')
 
     def __str__(self):
-        return f"{self.patient.username} booked {self.slot}"
+        return f"Dr. {self.doctor.username} - {self.date} {self.start_time}-{self.end_time}"
