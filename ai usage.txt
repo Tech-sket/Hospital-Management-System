@@ -1,0 +1,170 @@
+# "AI usage for google calender integration "
+
+✅ FIX (Step-by-step)
+🔴 STEP 1: Open Google Cloud Console
+
+Go to:
+https://console.cloud.google.com/
+
+🔴 STEP 2: Go to OAuth Consent Screen
+
+Navigate:
+
+APIs & Services → OAuth consent screen
+🔴 STEP 3: Add Test Users
+
+Scroll to:
+
+Test users
+
+Click:
+
+👉 ADD USERS
+
+Add the Gmail you are using to login, for example:
+
+yourgmail@gmail.com
+
+Then SAVE.
+
+🔴 STEP 4: Make sure status is "Testing"
+
+At top you will see:
+
+Publishing status: Testing
+
+That is correct for now.
+
+🔴 STEP 5: Re-login
+
+Now do:
+
+Open incognito window (important)
+
+Go to:
+
+http://127.0.0.1:8000/calendar/oauth2/
+Login again
+🚀 WHY THIS HAPPENS
+
+Google blocks apps because:
+
+You didn’t publish the app yet
+
+Your app requests sensitive scope:
+
+https://www.googleapis.com/auth/calendar
+
+So Google requires explicit permission.
+
+
+
+
+#"AI usage for serverless email intigration"
+
+
+✅ 1. How Serverless Email Integration Works
+
+Instead of:
+
+Django → SMTP → Email
+
+You will do:
+
+Django → HTTP Request → Serverless Email Function → Email Sent
+🔧 2. Create a reusable email function in Django
+
+Make a file:
+
+utils/serverless_email.py
+import requests
+
+def send_email(to_email, subject, message):
+    url = "https://your-serverless-endpoint.com/send-email"
+
+    payload = {
+        "to": to_email,
+        "subject": subject,
+        "message": message
+    }
+
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print("Email sending failed:", e)
+        return None
+🧠 3. Use it in your Django views
+
+Example (appointment booking):
+
+from utils.serverless_email import send_email
+
+def book_appointment(request):
+    if request.method == "POST":
+        email = request.POST.get("email")
+        doctor = request.POST.get("doctor")
+
+        # Save appointment logic here...
+
+        subject = "Appointment Confirmed"
+        message = f"Your appointment with Dr. {doctor} is confirmed."
+
+        send_email(email, subject, message)
+
+        return redirect("success_page")
+🔐 4. IMPORTANT (Most people miss this)
+Your serverless email API must accept:
+Example request:
+POST /send-email
+{
+  "to": "patient@gmail.com",
+  "subject": "Hello",
+  "message": "Your appointment is confirmed"
+}
+If your serverless function needs API key:
+
+Update headers:
+
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer YOUR_API_KEY"
+}
+⚡ 5. Best Practice (Recommended for your hospital system)
+
+Instead of calling email directly in view:
+
+Create a helper layer:
+services/
+    notifications.py
+from utils.serverless_email import send_email
+
+def send_appointment_confirmation(patient_email, doctor_name):
+    subject = "Appointment Confirmed"
+    message = f"Your appointment with Dr. {doctor_name} is confirmed."
+    send_email(patient_email, subject, message)
+
+Then in view:
+
+from services.notifications import send_appointment_confirmation
+🚀 6. Optional Upgrade (Highly recommended)
+
+If your system will scale:
+
+Add retry logic
+Add logging (email status saved in DB)
+Add async execution (Celery or Django-Q)
+📌 Quick Summary
+
+You are now doing:
+
+✔ Django view triggers event
+✔ Calls serverless API via requests
+✔ Email sent externally
+✔ No SMTP needed
+
