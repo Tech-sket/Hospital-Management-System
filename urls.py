@@ -1,7 +1,20 @@
-from django.urls import path
-from . import views
+from django.contrib import admin
+from django.urls import path, include
+from django.shortcuts import redirect
+
+def home(request):
+    return redirect("login")
 
 urlpatterns = [
-    path("oauth2/", views.oauth2_start, name="google_oauth_start"),
-    path("oauth2callback/", views.oauth2_callback, name="google_oauth_callback"),
+    path("", home, name="home"),
+
+    path("admin/", admin.site.urls),
+
+    path("accounts/", include("accounts.urls")),
+
+    path("doctors/", include("doctors.urls")),
+
+    path("bookings/", include("bookings.urls")),
+
+    path("calendar/", include("google_calendar.urls")),
 ]
